@@ -1,0 +1,132 @@
+change-cc - Claude Code Model & Settings Switcher
+=================================================
+
+OVERVIEW
+--------
+A bash script to easily manage Claude Code models, API endpoints, and
+authentication tokens via ~/.claude/settings.json.
+
+Features:
+  * Model switching with context window support
+  * Endpoint management (local proxy, official API, custom)
+  * Auth token updates
+  * Auto-backup before changes + manual backup/restore
+  * Interactive color-coded menu
+  * Direct command-line mode
+  * Global install/uninstall
+
+REQUIREMENTS
+------------
+  * Bash 4.0+
+  * jq (JSON processor)
+  * Claude Code installed
+
+INSTALLATION
+------------
+  git clone https://github.com/Fauzan-Fz/Change-Config-CC.git
+  cd change-cc
+  chmod +x change-cc
+  ./change-cc --install
+
+Uninstall: ./change-cc --uninstall
+
+USAGE
+-----
+Interactive Menu (default):
+  change-cc
+
+Direct model setting:
+  change-cc "anthropic/claude-sonnet[1m]"
+  change-cc "anthropic/claude-opus[200k]"
+
+List configuration:
+  change-cc --list
+  change-cc -l
+
+Help:
+  change-cc --help
+  change-cc -h
+
+MENU OPTIONS
+------------
+1) Change Endpoint URL (ANTHROPIC_BASE_URL)
+   Options:
+     1) Use current from settings.json
+     2) https://api.anthropic.com (official)
+     3) Custom URL
+     0) Exit
+
+2) Change Model (with Context)
+   Select model variant, then context:
+     Predefined: 4k, 8k, 16k, 32k, 64k, 128k, 200k, 500k, 1m, 2m
+     Custom: e.g., 500k, 1m
+     Remove context (use model default)
+     Change model name (keep context)
+
+3) Change Model Variants
+   Edit any variant directly:
+     - Default Model (ANTHROPIC_MODEL)
+     - Small/Fast Model (ANTHROPIC_SMALL_FAST_MODEL)
+     - Opus Model (ANTHROPIC_DEFAULT_OPUS_MODEL)
+     - Sonnet Model (ANTHROPIC_DEFAULT_SONNET_MODEL)
+     - Haiku Model (ANTHROPIC_DEFAULT_HAIKU_MODEL)
+     - Fable Model (ANTHROPIC_DEFAULT_FABLE_MODEL)
+
+4) Change API Key (ANTHROPIC_AUTH_TOKEN)
+
+5) Backup Menu
+   1) Make Backup (timestamped)
+   2) Restore from Backup
+   0) Back
+
+CONTEXT WINDOW FORMAT
+---------------------
+  model[4k]     = 4,000 tokens
+  model[500k]   = 500,000 tokens
+  model[1m]     = 1,000,000 tokens
+  model[2m]     = 2,000,000 tokens
+  model         = model default (no context override)
+
+Valid suffixes: k (thousands), m (millions) - case insensitive.
+
+CONFIGURATION FILE
+------------------
+~/.claude/settings.json
+
+Managed env vars:
+  ANTHROPIC_BASE_URL
+  ANTHROPIC_MODEL
+  ANTHROPIC_SMALL_FAST_MODEL
+  ANTHROPIC_DEFAULT_OPUS_MODEL
+  ANTHROPIC_DEFAULT_SONNET_MODEL
+  ANTHROPIC_DEFAULT_HAIKU_MODEL
+  ANTHROPIC_DEFAULT_FABLE_MODEL
+  ANTHROPIC_AUTH_TOKEN
+
+BACKUP LOCATION
+---------------
+~/.claude/settings.json.backup.YYYYMMDD_HHMMSS
+
+Example:
+  ls -la ~/.claude/settings.json.backup.*
+  cp ~/.claude/settings.json.backup.20260822_120000 ~/.claude/settings.json
+
+SCRIPT STRUCTURE
+----------------
+Key functions:
+  get_env_value()          - Read env value from settings.json
+  update_env()             - Update env value with backup
+  get_available_models()   - List all _MODEL env vars
+  extract_model_context()  - Parse model[context] format
+  format_tokens()          - Convert bytes to human readable
+  parse_tokens()           - Parse human readable to bytes
+  change_endpoint()        - Menu: change API endpoint
+  change_model_context()   - Menu: change model + context
+  change_model_variants()  - Menu: change model variants
+  change_auth_token()      - Menu: change API key
+  backup_menu()            - Menu: backup/restore
+  interactive_menu()       - Main menu loop
+
+VERSION
+-------
+v1.0.0

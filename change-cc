@@ -1,0 +1,758 @@
+#!/bin/bash
+# change-cc - Switch Claude Code models and settings in settings.json
+# Usage: change-cc [model] | change-cc --uninstall
+
+# NOTE: no `set -e` here — this is an interactive menu script.
+# With `set -e`, a failed `ls` (no backups found) or unexpected input
+# kills the whole script silently. Errors are handled explicitly instead.
+set -u
+
+# Configuration
+SETTINGS_FILE="$HOME/.claude/settings.json"
+SCRIPT_NAME="change-cc"
+INSTALL_DIR="$HOME/.local/bin"
+SCRIPT_PATH="$INSTALL_DIR/$SCRIPT_NAME"
+
+# Global state
+BACKUPS=()
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Print colored output
+print_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+print_header() { echo -e "${CYAN}$*${NC}"; }
+print_option() { echo -e "${MAGENTA}$*${NC}"; }
+
+# Validate jq is installed
+check_jq() {
+    if ! command -v jq &>/dev/null; then
+        print_error "jq is not installed. This script requires jq for JSON processing."
+        print_info "Install it with:"
+        print_info "  Ubuntu/Debian:  sudo apt update && sudo apt install jq"
+        print_info "  Fedora/RHEL:    sudo dnf install jq"
+        print_info "  Arch:           sudo pacman -S jq"
+        print_info "  macOS:          brew install jq"
+        print_info "  Alpine:         apk add jq"
+        exit 1
+    fi
+}
+
+# Check if settings.json exists
+check_settings_file() {
+    if [[ ! -f "$SETTINGS_FILE" ]]; then
+        print_error "Settings file not found: $SETTINGS_FILE"
+        exit 1
+    fi
+}
+
+# Create backup of settings
+create_backup() {
+    cp "$SETTINGS_FILE" "$SETTINGS_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+}
+
+# Get current value from settings
+get_value() {
+    local key="$1"
+    jq -r ".$key // \"\"" "$SETTINGS_FILE" 2>/dev/null
+}
+
+# Get env value
+get_env_value() {
+    local key="$1"
+    jq -r ".env.$key // \"\"" "$SETTINGS_FILE" 2>/dev/null
+}
+
+# Update a top-level field
+update_field() {
+    local field="$1"
+    local value="$2"
+    create_backup
+    jq --arg val "$value" ".${field} = \$val" "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+    print_success "Updated $field to: $value"
+}
+
+# Update an env field
+update_env() {
+    local key="$1"
+    local value="$2"
+    create_backup
+    jq --arg k "$key" --arg v "$value" '.env[$k] = $v' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+    print_success "Updated $key to: $value"
+}
+
+# Show current configuration
+show_current_config() {
+    print_header "╔══════════════════════════════════════════════════════════════╗"
+    print_header "║           Current Claude Code Configuration                 ║"
+    print_header "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    local base_url=$(get_env_value "ANTHROPIC_BASE_URL")
+    local auth_token=$(get_env_value "ANTHROPIC_AUTH_TOKEN")
+    local model_field=$(get_value "model")
+
+    print_option "🌐 Base URL (ANTHROPIC_BASE_URL):   ${GREEN}$base_url${NC}"
+    # Mask auth token: show first 3 chars, rest as x
+    local masked_token=""
+    if [[ ${#auth_token} -gt 3 ]]; then
+        local prefix="${auth_token:0:3}"
+        local rest_len=$((${#auth_token} - 3))
+        local masked_rest=$(printf 'x%.0s' $(eval echo {1..$rest_len}))
+        masked_token="${prefix}${masked_rest}"
+    else
+        masked_token="***"
+    fi
+    print_option "🔑 Auth Token:                      ${GREEN}${masked_token}${NC}"
+    print_option "🤖 Main Model (model field):        ${GREEN}${model_field:-"(not set)"}${NC}"
+    echo ""
+
+    print_header "Model Variants:"
+    local models=(
+        "ANTHROPIC_MODEL:Default Model"
+        "ANTHROPIC_SMALL_FAST_MODEL:Small/Fast Model"
+        "ANTHROPIC_DEFAULT_OPUS_MODEL:Opus Model"
+        "ANTHROPIC_DEFAULT_SONNET_MODEL:Sonnet Model"
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL:Haiku Model"
+        "ANTHROPIC_DEFAULT_FABLE_MODEL:Fable Model"
+    )
+
+    for entry in "${models[@]}"; do
+        IFS=':' read -r key label <<< "$entry"
+        local value=$(get_env_value "$key")
+        printf "  ${MAGENTA}%-30s${NC} = ${GREEN}%s${NC}\n" "$label" "$value"
+    done
+    echo ""
+}
+
+# Get available models from env
+get_available_models() {
+    jq -r '.env | to_entries[] | select(.key | endswith("_MODEL")) | "\(.key)|\(.value)"' "$SETTINGS_FILE" 2>/dev/null
+}
+
+# Interactive model selection from available
+select_from_available() {
+    local field="$1"
+    local label="$2"
+
+    local models_output=$(get_available_models)
+    local keys=()
+    local values=()
+    local labels=()
+
+    while IFS='|' read -r key value; do
+        keys+=("$key")
+        values+=("$value")
+        case "$key" in
+            "ANTHROPIC_MODEL") labels+=("Default Model") ;;
+            "ANTHROPIC_SMALL_FAST_MODEL") labels+=("Small/Fast Model") ;;
+            "ANTHROPIC_DEFAULT_OPUS_MODEL") labels+=("Opus Model") ;;
+            "ANTHROPIC_DEFAULT_SONNET_MODEL") labels+=("Sonnet Model") ;;
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL") labels+=("Haiku Model") ;;
+            "ANTHROPIC_DEFAULT_FABLE_MODEL") labels+=("Fable Model") ;;
+            *) labels+=("$key") ;;
+        esac
+    done <<< "$models_output"
+
+    echo ""
+    print_header "Select value for $label:"
+    for i in "${!labels[@]}"; do
+        local current_val=$(get_env_value "${keys[i]}")
+        local marker=""
+        if [[ "$current_val" == "${values[i]}" ]]; then
+            marker=" ${GREEN}← current${NC}"
+        fi
+        printf "  ${YELLOW}%2d)${NC} %-20s = ${GREEN}%s${NC}%s\n" $((i+1)) "${labels[i]}" "${values[i]}" "$marker"
+    done
+    printf "  ${YELLOW}%2d)${NC} Custom value\n" $(( ${#labels[@]} + 1 ))
+    printf "  ${YELLOW}%2d)${NC} Cancel\n" 0
+    echo ""
+
+    read_choice "Select [0-$(( ${#labels[@]} + 1 ))]: " 0 $(( ${#labels[@]} + 1 ))
+    local selection=$CHOICE
+
+    if [[ $selection -eq 0 ]]; then
+        print_info "Cancelled"
+        return 0
+    elif [[ $selection -le ${#labels[@]} ]]; then
+        update_env "$field" "${values[$((selection-1))]}"
+    else
+        read -r -p "Enter custom value: " custom
+        if [[ -n "$custom" ]]; then
+            update_env "$field" "$custom"
+        fi
+    fi
+    return 0
+}
+
+# Change endpoint URL
+change_endpoint() {
+    print_header "═══ Change Endpoint URL (ANTHROPIC_BASE_URL) ═══"
+    local current=$(get_env_value "ANTHROPIC_BASE_URL")
+    print_option "Current: $current"
+    echo ""
+    print_option "Options:"
+    echo "  1) Use current from settings.json ($current)"
+    echo "  2) https://api.anthropic.com (official Anthropic)"
+    echo "  3) Custom URL"
+    echo "  0) Exit"
+    echo ""
+    read_choice "Select [0-3]: " 0 3
+
+    case "$CHOICE" in
+        1) update_env "ANTHROPIC_BASE_URL" "$current" ;;
+        2) update_env "ANTHROPIC_BASE_URL" "https://api.anthropic.com" ;;
+        3)
+            read -r -p "Enter custom URL: " custom_url
+            if [[ -n "$custom_url" ]]; then
+                update_env "ANTHROPIC_BASE_URL" "$custom_url"
+            fi
+            ;;
+        0) print_info "Exit" ;;
+    esac
+    return 0
+}
+
+# Change API Key
+change_auth_token() {
+    print_header "═══ Change API Key (ANTHROPIC_AUTH_TOKEN) ═══"
+    local current=$(get_env_value "ANTHROPIC_AUTH_TOKEN")
+    # Show masked current
+    local masked_current=""
+    if [[ ${#current} -gt 3 ]]; then
+        local prefix="${current:0:3}"
+        local rest_len=$((${#current} - 3))
+        local masked_rest=$(printf 'x%.0s' $(eval echo {1..$rest_len}))
+        masked_current="${prefix}${masked_rest}"
+    else
+        masked_current="***"
+    fi
+    print_option "Current: ${masked_current} (${#current} chars)"
+    echo ""
+
+    # Secret input with asterisk display (use read -s for full line)
+    print_option "Enter new API key (input hidden): "
+    local new_key=""
+    if read -s -r new_key; then
+        echo ""
+        if [[ -n "$new_key" ]]; then
+            # Show asterisks for visual feedback
+            printf '%*s\n' "${#new_key}" '' | tr ' ' '*'
+            update_env "ANTHROPIC_AUTH_TOKEN" "$new_key"
+        else
+            print_warning "No key entered, skipping"
+        fi
+    else
+        echo ""
+        print_warning "No key entered, skipping"
+    fi
+}
+
+# Helper: format tokens to human readable (k/m)
+format_tokens() {
+    local tokens="$1"
+    if [[ $tokens -ge 1000000 ]]; then
+        echo "$(( tokens / 1000000 ))m"
+    elif [[ $tokens -ge 1000 ]]; then
+        echo "$(( tokens / 1000 ))k"
+    else
+        echo "$tokens"
+    fi
+}
+
+# Helper: parse human readable to tokens (supports k, m suffixes)
+parse_tokens() {
+    local input="$1"
+    if [[ "$input" =~ ^([0-9]+)([kmKM])?$ ]]; then
+        local num="${BASH_REMATCH[1]}"
+        local suffix="${BASH_REMATCH[2],,}"  # lowercase
+        case "$suffix" in
+            k) echo $(( num * 1000 )) ;;
+            m) echo $(( num * 1000000 )) ;;
+            "") echo "$num" ;;
+        esac
+    else
+        echo ""
+    fi
+}
+
+# Extract model name and context from value
+# Returns: model_name|context_str
+extract_model_context() {
+    local value="$1"
+    if [[ "$value" =~ ^(.+)\[([0-9]+[km]?)\]$ ]]; then
+        echo "${BASH_REMATCH[1]}|${BASH_REMATCH[2]}"
+    else
+        echo "$value|"
+    fi
+}
+
+# Change context for model variants (ANTHROPIC_MODEL, ANTHROPIC_SMALL_FAST_MODEL, etc.)
+change_model_context() {
+    while true; do
+        print_header "═══ Change Model Variant Context ═══"
+        echo ""
+        print_info "Select which model variant to add/change context:"
+        echo ""
+
+        # Get all model variants from env
+        local variant_keys=()
+        local variant_labels=()
+        local variant_values=()
+
+        while IFS='|' read -r key value; do
+            variant_keys+=("$key")
+            variant_values+=("$value")
+            case "$key" in
+                "ANTHROPIC_MODEL") variant_labels+=("Default Model") ;;
+                "ANTHROPIC_SMALL_FAST_MODEL") variant_labels+=("Small/Fast Model") ;;
+                "ANTHROPIC_DEFAULT_OPUS_MODEL") variant_labels+=("Opus Model") ;;
+                "ANTHROPIC_DEFAULT_SONNET_MODEL") variant_labels+=("Sonnet Model") ;;
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL") variant_labels+=("Haiku Model") ;;
+                "ANTHROPIC_DEFAULT_FABLE_MODEL") variant_labels+=("Fable Model") ;;
+                *) variant_labels+=("$key") ;;
+            esac
+        done < <(get_available_models)
+
+        # Display numbered list
+        for i in "${!variant_keys[@]}"; do
+            local display_val="${variant_values[i]}"
+            if [[ -z "$display_val" ]]; then
+                display_val="(empty)"
+            fi
+            printf "  ${YELLOW}%2d)${NC} %-30s = ${GREEN}%s${NC}\n" $((i+1)) "${variant_labels[i]} (${variant_keys[i]})" "$display_val"
+        done
+
+        local base_count=${#variant_keys[@]}
+        printf "  ${RED}%2d)${NC}  Back to main menu\n" 0
+        echo ""
+
+        read_choice "Select variant [0-$base_count]: " 0 $base_count
+        local choice=$CHOICE
+
+        [[ $choice -eq 0 ]] && return 0
+
+        local variant_key="${variant_keys[$((choice-1))]}"
+        local current_value="${variant_values[$((choice-1))]}"
+        local variant_label="${variant_labels[$((choice-1))]}"
+
+        echo ""
+        print_header "═══ Change Context for $variant_label ($variant_key) ═══"
+        echo ""
+        print_info "Current value: ${current_value:-"(empty)"}"
+        echo ""
+
+        # Extract current model name and context
+        local extracted=$(extract_model_context "$current_value")
+        IFS='|' read -r current_model current_context_str <<< "$extracted"
+
+        # Show current context if present
+        if [[ -n "$current_context_str" ]]; then
+            local current_tokens=$(parse_tokens "$current_context_str")
+            print_info "Current context: [$current_context_str] = $current_tokens tokens"
+        else
+            print_info "Current context: (none - using model default)"
+        fi
+        echo ""
+
+        # Predefined context options with human-readable labels
+        local contexts=(
+            "4k:4k"
+            "8k:8k"
+            "16k:16k"
+            "32k:32k"
+            "64k:64k"
+            "128k:128k"
+            "200k:200k"
+            "500k:500k"
+            "1m:1m"
+            "2m:2m"
+        )
+        local ctx_len=${#contexts[@]}
+
+        print_option "Select context suffix for model: ${current_model:-"(enter model name first)"}"
+        for i in "${!contexts[@]}"; do
+            IFS=':' read -r label tokens <<< "${contexts[i]}"
+            local marker=""
+            [[ "$label" == "$current_context_str" ]] && marker=" ${GREEN}← current${NC}"
+            printf "  ${YELLOW}%2d)${NC}  [%-6s] (%s tokens)%s\n" $((i+1)) "$label" "$tokens" "$marker"
+        done
+
+        printf "  ${YELLOW}%2d)${NC}  Custom context (e.g., 500k, 1m)\n" $(( ctx_len + 1 ))
+        printf "  ${YELLOW}%2d)${NC}  Remove context (use model default)\n" $(( ctx_len + 2 ))
+        printf "  ${YELLOW}%2d)${NC}  Change model name (keep current context)\n" $(( ctx_len + 3 ))
+        printf "  ${RED}%2d)${NC}  Back to variant selection\n" 0
+        echo ""
+
+        read_choice "Select option [0-$(( ctx_len + 3 ))]: " 0 $(( ctx_len + 3 ))
+        local opt_choice=$CHOICE
+
+        [[ $opt_choice -eq 0 ]] && { echo ""; continue; }
+
+        local new_value=""
+        local model_to_use="$current_model"
+
+        if [[ $opt_choice -le $ctx_len ]]; then
+            IFS=':' read -r context_label _ <<< "${contexts[$((opt_choice-1))]}"
+            [[ -z "$model_to_use" ]] && { print_error "No model name set. Use option 13 first."; continue; }
+            new_value="${model_to_use}[$context_label]"
+        elif [[ $opt_choice -eq $(( ctx_len + 1 )) ]]; then
+            [[ -z "$model_to_use" ]] && { print_error "No model name set. Use option 13 first."; continue; }
+            read -r -p "Enter custom context (e.g., 500k, 1m): " custom_context
+            [[ -z "$custom_context" ]] && { print_warning "No value entered, skipping"; continue; }
+            local parsed=$(parse_tokens "$custom_context")
+            [[ -z "$parsed" ]] && { print_error "Invalid format. Use suffix k/m (e.g., 500k, 1m)"; continue; }
+            local display_ctx=$(format_tokens "$parsed")
+            new_value="${model_to_use}[$display_ctx]"
+        elif [[ $opt_choice -eq $(( ctx_len + 2 )) ]]; then
+            # Remove context, keep model name only
+            [[ -z "$model_to_use" ]] && { print_error "No model name set. Use option 13 first."; continue; }
+            new_value="$model_to_use"
+        elif [[ $opt_choice -eq $(( ctx_len + 3 )) ]]; then
+            # Change model name, keep context
+            read -r -p "Enter new model name (current: ${model_to_use:-"(none)"}): " new_model_name
+            [[ -z "$new_model_name" ]] && { print_warning "No value entered, skipping"; continue; }
+            model_to_use="$new_model_name"
+            if [[ -n "$current_context_str" ]]; then
+                new_value="${model_to_use}[$current_context_str]"
+            else
+                new_value="$model_to_use"
+            fi
+        fi
+
+        if [[ -n "$new_value" ]]; then
+            create_backup
+            update_env "$variant_key" "$new_value"
+            print_success "$variant_label updated to: $new_value"
+        fi
+        echo ""
+    done
+}
+
+# Change model variants - dynamic from settings
+change_model_variants() {
+    while true; do
+        print_header "═══ Change Model Variants ═══"
+        echo ""
+        print_info "Current model variants (auto-detected from settings):"
+        echo ""
+
+        # Dynamically get all env keys ending with _MODEL
+        local variant_keys=()
+        local variant_labels=()
+        local variant_values=()
+
+        while IFS='|' read -r key value; do
+            variant_keys+=("$key")
+            variant_values+=("$value")
+            # Generate friendly label from key
+            case "$key" in
+                "ANTHROPIC_MODEL") variant_labels+=("Default Model") ;;
+                "ANTHROPIC_SMALL_FAST_MODEL") variant_labels+=("Small/Fast Model") ;;
+                "ANTHROPIC_DEFAULT_OPUS_MODEL") variant_labels+=("Opus Model") ;;
+                "ANTHROPIC_DEFAULT_SONNET_MODEL") variant_labels+=("Sonnet Model") ;;
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL") variant_labels+=("Haiku Model") ;;
+                "ANTHROPIC_DEFAULT_FABLE_MODEL") variant_labels+=("Fable Model") ;;
+                *) variant_labels+=("$key") ;;
+            esac
+        done < <(get_available_models)
+
+        # Display numbered list
+        for i in "${!variant_keys[@]}"; do
+            printf "  ${YELLOW}%2d)${NC} %-30s = ${GREEN}%s${NC}\n" $((i+1)) "${variant_labels[i]} (${variant_keys[i]})" "${variant_values[i]}"
+        done
+
+        local base_count=${#variant_keys[@]}
+        printf "  ${RED}%2d)${NC} Back to main menu\n" 0
+        echo ""
+
+        read_choice "Select variant [0-$base_count]: " 0 $base_count
+        local choice=$CHOICE
+
+        [[ $choice -eq 0 ]] && return 0
+
+        local variant_key="${variant_keys[$((choice-1))]}"
+        local variant_label="${variant_labels[$((choice-1))]}"
+
+        # Show current value
+        local current_val=$(get_env_value "$variant_key")
+        if [[ -n "$current_val" ]]; then
+            print_info "Current value: $current_val"
+        else
+            print_info "No current value (new variant)"
+        fi
+
+        read -r -p "Enter new model value (e.g., prov1/model1, custom-model, etc.): " new_model
+        [[ -z "$new_model" ]] && { print_warning "No value entered, skipping"; continue; }
+
+        update_env "$variant_key" "$new_model"
+        echo ""
+    done
+}
+
+# Main interactive menu
+interactive_menu() {
+    while true; do
+        clear
+        show_current_config
+
+        print_header "══════════════════════════════════════════════════════════════"
+        print_header "                    CHANGE-CC MENU                             "
+        print_header "══════════════════════════════════════════════════════════════"
+        echo ""
+        print_option "  ${YELLOW}1)${NC} Change Endpoint URL (ANTHROPIC_BASE_URL)"
+        print_option "  ${YELLOW}2)${NC} Change Model (with Context: model[500k], model[1m])"
+        print_option "  ${YELLOW}3)${NC} Change Model Variants (Opus, Sonnet, Haiku, Fable, etc.)"
+        print_option "  ${YELLOW}4)${NC} Change API Key (ANTHROPIC_AUTH_TOKEN)"
+        print_option "  ${YELLOW}5)${NC} Backup Menu (make / restore backup)"
+        print_option "  ${RED}0)${NC} Exit"
+        echo ""
+
+        read_choice "Select option [0-5]: " 0 5
+
+        case "$CHOICE" in
+            1) change_endpoint ;;
+            2) change_model_context ;;
+            3) change_model_variants ;;
+            4) change_auth_token ;;
+            5) backup_menu ;;
+            0)
+                print_info "Goodbye!"
+                exit 0
+                ;;
+        esac
+        echo ""
+    done
+}
+
+# Make a manual backup (auto-named with timestamp, no prompt)
+make_backup() {
+    print_header "═══ Make Backup ═══"
+    local backup_name="settings.json.backup.$(date +%Y%m%d_%H%M%S)"
+
+    cp "$SETTINGS_FILE" "$HOME/.claude/$backup_name"
+    print_success "Backup created: $HOME/.claude/$backup_name"
+
+    # Refresh and show the updated list immediately
+    scan_backups
+    echo ""
+    print_info "Current backups (${#BACKUPS[@]}):"
+    for f in "${BACKUPS[@]}"; do
+        printf "       • %s\n" "$(basename "$f" | sed 's/settings.json.backup.//')"
+    done
+    return 0
+}
+
+# List available backups (returns array via global BACKUPS)
+scan_backups() {
+    BACKUPS=()
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && BACKUPS+=("$f")
+    done < <(ls -t "$HOME/.claude/"settings.json.backup.* 2>/dev/null | head -20 || true)
+    return 0
+}
+
+# Read a menu choice safely; loops until valid number in [min,max] or 'q'
+read_choice() {
+    local prompt="$1" min="$2" max="$3" input
+    while true; do
+        read -r -p "$prompt" input
+        # empty input or non-numeric -> re-ask (never crash)
+        if ! [[ "$input" =~ ^[0-9]+$ ]]; then
+            print_error "Please enter a number between $min and $max"
+            continue
+        fi
+        if (( input >= min && input <= max )); then
+            CHOICE="$input"
+            return 0
+        fi
+        print_error "Please enter a number between $min and $max"
+    done
+}
+
+# Restore from backup
+restore_backup() {
+    print_header "═══ Restore from Backup ═══"
+    scan_backups
+    local n=${#BACKUPS[@]}
+
+    if [[ $n -eq 0 ]]; then
+        print_warning "No backup files found in ~/.claude/"
+    else
+        echo "Available backups:"
+        for i in "${!BACKUPS[@]}"; do
+            local date_str=$(basename "${BACKUPS[i]}" | sed 's/settings.json.backup.//')
+            printf "  ${YELLOW}%2d)${NC} %s\n" $((i+1)) "$date_str"
+        done
+    fi
+    printf "  ${YELLOW}%2d)${NC} Custom path (use your own backup file)\n" $(( n + 1 ))
+    printf "  ${YELLOW}%2d)${NC} Cancel\n" 0
+    echo ""
+
+    read_choice "Select [0-$(( n + 1 ))]: " 0 $(( n + 1 ))
+    local choice=$CHOICE
+
+    if [[ $choice -eq 0 ]]; then
+        print_info "Cancelled"
+        return 0
+    fi
+
+    local source_file=""
+    if [[ $choice -le $n ]]; then
+        source_file="${BACKUPS[$((choice-1))]}"
+    else
+        read -r -p "Enter full path to backup file: " custom_path
+        # Expand ~ if present
+        custom_path="${custom_path/#\~/$HOME}"
+        if [[ ! -f "$custom_path" ]]; then
+            print_error "File not found: $custom_path"
+            return 0
+        fi
+        # Validate it's valid JSON before restoring
+        if ! jq empty "$custom_path" 2>/dev/null; then
+            print_error "File is not valid JSON: $custom_path"
+            return 0
+        fi
+        source_file="$custom_path"
+    fi
+
+    create_backup  # safety backup of current state before overwriting
+    cp "$source_file" "$SETTINGS_FILE"
+    print_success "Restored from: $source_file"
+    return 0
+}
+
+# Backup management menu
+backup_menu() {
+    while true; do
+        clear
+        print_header "╔══════════════════════════════════════════════════════════════╗"
+        print_header "║                       BACKUP MENU                            ║"
+        print_header "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+        scan_backups
+        if [[ ${#BACKUPS[@]} -eq 0 ]]; then
+            print_warning "No backups found in ~/.claude/"
+        else
+            print_info "Found ${#BACKUPS[@]} backup(s):"
+            for f in "${BACKUPS[@]}"; do
+                printf "       • %s\n" "$(basename "$f" | sed 's/settings.json.backup.//')"
+            done
+        fi
+        echo ""
+        print_option "  ${YELLOW}1)${NC} Make Backup (save current settings)"
+        print_option "  ${YELLOW}2)${NC} Restore Backup (from list or custom path)"
+        print_option "  ${RED}0)${NC} Back to Main Menu"
+        echo ""
+
+        read_choice "Select option [0-2]: " 0 2
+        case "$CHOICE" in
+            1) make_backup ;;
+            2) restore_backup ;;
+            0) return 0 ;;
+        esac
+        echo ""
+    done
+}
+
+# Install the script
+install_script() {
+    mkdir -p "$INSTALL_DIR"
+    cp "$0" "$SCRIPT_PATH"
+    chmod +x "$SCRIPT_PATH"
+
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        print_warning "$INSTALL_DIR is not in your PATH"
+        print_info "Add this to your ~/.bashrc or ~/.zshrc:"
+        echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
+    fi
+
+    print_success "Installed $SCRIPT_NAME to $SCRIPT_PATH"
+    print_info "You can now run '$SCRIPT_NAME' from anywhere"
+}
+
+# Uninstall the script
+uninstall_script() {
+    if [[ -f "$SCRIPT_PATH" ]]; then
+        rm "$SCRIPT_PATH"
+        print_success "Uninstalled $SCRIPT_NAME from $SCRIPT_PATH"
+    else
+        print_warning "$SCRIPT_NAME not found at $SCRIPT_PATH"
+    fi
+
+    # Remove backup files older than 30 days
+    find "$HOME/.claude" -name "settings.json.backup.*" -mtime +30 -delete 2>/dev/null || true
+    print_info "Cleaned up old backup files"
+}
+
+# Show help
+show_help() {
+    cat << EOF
+Usage: $SCRIPT_NAME [OPTIONS] [MODEL]
+
+Switch Claude Code models and settings in ~/.claude/settings.json
+
+OPTIONS:
+    -h, --help       Show this help message
+    -l, --list       Show current configuration
+    -i, --install    Install the change-cc command globally
+    -u, --uninstall  Uninstall the change-cc command
+
+EXAMPLES:
+    $SCRIPT_NAME                    # Interactive menu
+    $SCRIPT_NAME oc/nemotron-3-ultra-free   # Set main model directly
+    $SCRIPT_NAME --list             # Show current configuration
+    $SCRIPT_NAME --install          # Install globally
+    $SCRIPT_NAME --uninstall        # Remove global command
+
+FEATURES:
+    • Interactive menu for all settings
+    • Change endpoint URL (ANTHROPIC_BASE_URL)
+    • Change main model (model field)
+    • Change all model variants (Opus, Sonnet, Haiku, Fable, Small/Fast)
+    • Change API key (ANTHROPIC_AUTH_TOKEN)
+    • Backup and restore functionality
+    • Global install/uninstall
+
+EOF
+}
+
+# Main function
+main() {
+    check_jq
+    check_settings_file
+
+    case "${1:-}" in
+        -h|--help)
+            show_help
+            ;;
+        -l|--list)
+            show_current_config
+            ;;
+        -i|--install)
+            install_script
+            ;;
+        -u|--uninstall)
+            uninstall_script
+            ;;
+        "")
+            interactive_menu
+            ;;
+        *)
+            # Direct model setting - update ANTHROPIC_MODEL env var instead of top-level model field
+            update_env "ANTHROPIC_MODEL" "$1"
+            ;;
+    esac
+}
+
+# Run main
+main "$@"
