@@ -56,14 +56,14 @@ MENU OPTIONS
      3) Custom URL
      0) Exit
 
-2) Change Model (with Context)
+2) Change Model Context (Fixed Layout)
    Select model variant, then context:
      Predefined: 4k, 8k, 16k, 32k, 64k, 128k, 200k, 500k, 1m, 2m
      Custom: e.g., 500k, 1m
      Remove context (use model default)
      Change model name (keep context)
 
-3) Change Model Variants
+3) Change Model Variants (Fixed Layout + Custom Models)
    Edit any variant directly:
      - Default Model (ANTHROPIC_MODEL)
      - Small/Fast Model (ANTHROPIC_SMALL_FAST_MODEL)
@@ -71,10 +71,13 @@ MENU OPTIONS
      - Sonnet Model (ANTHROPIC_DEFAULT_SONNET_MODEL)
      - Haiku Model (ANTHROPIC_DEFAULT_HAIKU_MODEL)
      - Fable Model (ANTHROPIC_DEFAULT_FABLE_MODEL)
+     - Custom Model Variables
 
-4) Change API Key (ANTHROPIC_AUTH_TOKEN)
+4) Change Main Model Field (.model)
 
-5) Backup Menu
+5) Change API Key (ANTHROPIC_AUTH_TOKEN)
+
+6) Backup Menu
    1) Make Backup (timestamped)
    2) Restore from Backup
    0) Back
@@ -116,17 +119,18 @@ SCRIPT STRUCTURE
 Key functions:
   get_env_value()          - Read env value from settings.json
   update_env()             - Update env value with backup
-  get_available_models()   - List all _MODEL env vars
+  get_all_model_variants() - Fixed order list of standard and custom models
   extract_model_context()  - Parse model[context] format
   format_tokens()          - Convert bytes to human readable
   parse_tokens()           - Parse human readable to bytes
   change_endpoint()        - Menu: change API endpoint
   change_model_context()   - Menu: change model + context
   change_model_variants()  - Menu: change model variants
+  change_main_model()      - Menu: change top-level model field
   change_auth_token()      - Menu: change API key
   backup_menu()            - Menu: backup/restore
   interactive_menu()       - Main menu loop
 
 VERSION
 -------
-v1.0.0
+v1.0.1
