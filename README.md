@@ -20,7 +20,7 @@
 | **🌐 Endpoint Management** | Switch between local proxy, official Anthropic API, or custom endpoints |
 | **🔑 Auth Token** | Update `ANTHROPIC_AUTH_TOKEN` securely |
 | **💾 Backup/Restore** | Auto-backup before changes, manual backup, and restore from any backup |
-| **🎨 Interactive Menu** | Color-coded, user-friendly navigation |
+| **🎨 Interactive Menu** | Color-coded, user-friendly navigation with fixed layout consistency |
 | **⚡ Direct Mode** | `change-cc "model-name[1m]"` for quick model updates |
 | **📦 Global Install** | Install to `~/.local/bin` for system-wide access |
 
@@ -33,7 +33,7 @@
 ```bash
 # Clone and install globally
 git clone https://github.com/Fauzan-Fz/Change-Config-CC.git
-cd change-cc
+cd Change-Config-CC
 chmod +x change-cc
 ./change-cc --install
 ```
@@ -74,10 +74,11 @@ change-cc
                     CHANGE-CC MENU                             
 ══════════════════════════════════════════════════════════════
   1) Change Endpoint URL (ANTHROPIC_BASE_URL)
-  2) Change Model (with Context: model[500k], model[1m])
-  3) Change Model Variants (Opus, Sonnet, Haiku, Fable, etc.)
-  4) Change API Key (ANTHROPIC_AUTH_TOKEN)
-  5) Backup Menu (make / restore backup)
+  2) Change Model Context (model[500k], model[1m])
+  3) Change Model Variants (Default, Opus, Sonnet, Haiku, Fable, etc.)
+  4) Change Main Model Field (.model)
+  5) Change API Key (ANTHROPIC_AUTH_TOKEN)
+  6) Backup Menu (make / restore backup)
   0) Exit
 ```
 
@@ -85,7 +86,7 @@ change-cc
 
 ```bash
 # Set main model with context
-change-cc "anthropic/claude-sonnet"
+change-cc "anthropic/claude-sonnet[1m]"
 
 # Set model without context (uses model default)
 change-cc "anthropic/claude-sonnet"
@@ -105,7 +106,7 @@ change-cc -l
 **Output:**
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║           Current Claude Code Configuration                 
+║           Current Claude Code Configuration                 ║
 ╚══════════════════════════════════════════════════════════════╝
 
 🌐 Base URL (ANTHROPIC_BASE_URL):   https://api.anthropic.com
@@ -115,7 +116,7 @@ change-cc -l
 Model Variants:
   Default Model                  = anthropic/claude-sonnet
   Small/Fast Model               = anthropic/claude-haiku
-  Opus Model                     = anthropic/claude-pus
+  Opus Model                     = anthropic/claude-opus
   Sonnet Model                   = anthropic/claude-sonnet
   Haiku Model                    = anthropic/claude-haiku
   Fable Model                    = anthropic/claude-fable
@@ -137,25 +138,21 @@ change-cc -h
 
 ```
 ═══ Change Endpoint URL (ANTHROPIC_BASE_URL) ═══
-Current: https://your-custom-endpoint.com/
+Current: https://api.anthropic.com
 Options:
-  1) Use current from settings.json (https://your-custom-endpoint.com/)
+  1) Use current from settings.json (https://api.anthropic.com)
   2) https://api.anthropic.com (official Anthropic)
   3) Custom URL
   0) Exit
 ```
 
-- **Option 1**: Keeps current value (syncs with settings.json)
-- **Option 2**: Switches to official Anthropic API
-- **Option 3**: Enter any custom endpoint (e.g., `http://localhost:8080`)
+### 2. Change Model Context
 
-### 2. Change Model (with Context)
-
-Select a model variant, then choose context size:
+Select a model variant from guaranteed fixed order, then choose context size:
 
 ```
 ═══ Change Model Variant Context ═══
-Select which model variant to add/change context:
+Select which model variant to add/change context (Guaranteed Fixed Order):
    1) Default Model (ANTHROPIC_MODEL) = anthropic/claude-sonnet
    2) Small/Fast Model (ANTHROPIC_SMALL_FAST_MODEL) = anthropic/claude-haiku
    3) Opus Model (ANTHROPIC_DEFAULT_OPUS_MODEL) = anthropic/claude-opus
@@ -175,50 +172,49 @@ Select context suffix for model: anthropic/claude-haiku
    8)  [500k  ] (500k tokens)
    9)  [1m    ] (1m tokens)
   10)  [2m    ] (2m tokens)
-   7)  Custom context (e.g., 500k, 1m)
-   8)  Remove context (use model default)
-   9)  Change model name (keep current context)
+  11)  Custom context (e.g., 500k, 1m)
+  12)  Remove context (use model default)
+  13)  Change model name (keep current context)
    0)  Back to variant selection
 ```
 
 ### 3. Change Model Variants
 
-Modify any model variant directly:
+Modify any model variant directly with fixed layout consistency:
 
 ```
 ═══ Change Model Variants ═══
-Current model variants (auto-detected from settings):
+Current model variants (Guaranteed Fixed Layout):
    1) Default Model (ANTHROPIC_MODEL) = anthropic/claude-sonnet
-   2) Small/Fast Model (ANTHROPIC_SMALL_FAST_MODEL) = anthropic/claude-sonnet
+   2) Small/Fast Model (ANTHROPIC_SMALL_FAST_MODEL) = anthropic/claude-haiku
    3) Opus Model (ANTHROPIC_DEFAULT_OPUS_MODEL) = anthropic/claude-opus
    4) Sonnet Model (ANTHROPIC_DEFAULT_SONNET_MODEL) = anthropic/claude-sonnet
    5) Haiku Model (ANTHROPIC_DEFAULT_HAIKU_MODEL) = anthropic/claude-haiku
    6) Fable Model (ANTHROPIC_DEFAULT_FABLE_MODEL) = anthropic/claude-fable
+   7) Add/Edit Other Custom Model Variable
    0) Back to main menu
 ```
 
-Enter new model value (e.g., `anthropic/claude-sonnet[500k]`).
+### 4. Change Main Model Field
 
-### 4. Change API Key
+Update top-level `.model` field (`sonnet`, `opus`, `haiku`, or custom).
+
+### 5. Change API Key
 
 ```
 ═══ Change API Key (ANTHROPIC_AUTH_TOKEN) ═══
 Current: sk-xxxxxxxxxxxxx-... (40 chars)
-Enter new API key: 
+Enter new API key (input hidden):
 ```
 
-### 5. Backup Menu
+### 6. Backup Menu
 
 ```
 ═══ Backup Menu ═══
-  1) Make Backup
-  2) Restore from Backup
-  0) Back to main menu
+  1) Make Backup (save current settings)
+  2) Restore Backup (from list or custom path)
+  0) Back to Main Menu
 ```
-
-**Make Backup:** Creates timestamped backup in `~/.claude/settings.json.backup.YYYYMMDD_HHMMSS`
-
-**Restore from Backup:** Lists available backups, select one to restore.
 
 ---
 
@@ -255,24 +251,10 @@ The script reads/writes to `~/.claude/settings.json`:
     "ANTHROPIC_DEFAULT_FABLE_MODEL": "anthropic/claude-fable"
   },
   "model": "haiku",
-  "enabledPlugins": { ... },
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
   "theme": "dark"
 }
 ```
-
-### Managed Environment Variables
-
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `ANTHROPIC_BASE_URL` | API endpoint URL | `https://api.anthropic.com` |
-| `ANTHROPIC_MODEL` | Main model (with context) | — |
-| `ANTHROPIC_SMALL_FAST_MODEL` | Small/fast model variant | — |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | Opus model variant | — |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | Sonnet model variant | — |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku model variant | — |
-| `ANTHROPIC_DEFAULT_FABLE_MODEL` | Fable model variant | — |
-| `ANTHROPIC_AUTH_TOKEN` | API authentication token | — |
 
 ---
 
@@ -284,50 +266,6 @@ The script reads/writes to `~/.claude/settings.json`:
 
 ---
 
-## 📂 Backup Location
-
-Backups stored in: `~/.claude/settings.json.backup.YYYYMMDD_HHMMSS`
-
-```bash
-# List backups manually
-ls -la ~/.claude/settings.json.backup.*
-
-# Manual restore
-cp ~/.claude/settings.json.backup.20260822_120000 ~/.claude/settings.json
-```
-
----
-
-## 🛠️ Development
-
-### Script Structure
-
-```
-change-cc/
-├── change-cc          # Main executable script
-├── README.md          # This file
-└── CHANGELOG.txt      # Version history
-```
-
-### Key Functions
-
-| Function | Purpose |
-|----------|---------|
-| `get_env_value()` | Read env value from settings.json |
-| `update_env()` | Update env value with backup |
-| `get_available_models()` | List all `_MODEL` env vars |
-| `extract_model_context()` | Parse `model[context]` format |
-| `format_tokens()` | Convert bytes → human readable (k/m) |
-| `parse_tokens()` | Parse human readable → bytes |
-| `change_endpoint()` | Menu: change API endpoint |
-| `change_model_context()` | Menu: change model + context |
-| `change_model_variants()` | Menu: change model variants |
-| `change_auth_token()` | Menu: change API key |
-| `backup_menu()` | Menu: backup/restore |
-| `interactive_menu()` | Main menu loop |
-
----
-
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -335,4 +273,3 @@ change-cc/
 3. Commit changes: `git commit -m 'Add amazing feature'`
 4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
-
