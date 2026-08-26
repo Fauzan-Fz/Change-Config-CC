@@ -22,6 +22,7 @@
 | **💾 Backup/Restore** | Auto-backup before changes, manual backup, and restore from any backup |
 | **🎨 Interactive Menu** | Color-coded, user-friendly navigation with fixed layout consistency |
 | **⚡ Direct Mode** | `change-cc "model-name[1m]"` for quick model updates |
+| **🚀 Self-Update** | Update script to latest version directly from GitHub via menu or CLI |
 | **📦 Global Install** | Install to `~/.local/bin` for system-wide access |
 
 ---
@@ -71,7 +72,7 @@ change-cc
 **Menu Options:**
 ```
 ══════════════════════════════════════════════════════════════
-                    CHANGE-CC MENU                             
+                 CHANGE-CC MENU (v1.1.0)                       
 ══════════════════════════════════════════════════════════════
   1) Change Endpoint URL (ANTHROPIC_BASE_URL)
   2) Change Model Context (model[500k], model[1m])
@@ -79,6 +80,7 @@ change-cc
   4) Change Main Model Field (.model)
   5) Change API Key (ANTHROPIC_AUTH_TOKEN)
   6) Backup Menu (make / restore backup)
+  7) Update Script (Download latest from GitHub)
   0) Exit
 ```
 
@@ -93,6 +95,15 @@ change-cc "anthropic/claude-sonnet"
 
 # Any valid model identifier
 change-cc "anthropic/claude-opus[200k]"
+```
+
+### Update Script Directly
+
+```bash
+# Update script to latest version from GitHub:
+change-cc --update
+# or
+change-cc -U
 ```
 
 ### List Current Configuration
@@ -216,6 +227,16 @@ Enter new API key (input hidden):
   0) Back to Main Menu
 ```
 
+### 7. Update Script
+
+```
+═══ Update Script (from GitHub) ═══
+Current script version: v1.1.0
+Fetching latest version from GitHub repository...
+Remote version available: v1.1.0
+[SUCCESS] Successfully updated change-cc to v1.1.0!
+```
+
 ---
 
 ## 🎯 Context Window Format
@@ -263,6 +284,7 @@ The script reads/writes to `~/.claude/settings.json`:
 - **Bash 4.0+**
 - **jq** (JSON processor) — `apt install jq` / `brew install jq` / `pacman -S jq`
 - **Claude Code** installed and configured
+- **curl** or **wget** (for self-update)
 
 ---
 

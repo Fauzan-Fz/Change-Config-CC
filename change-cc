@@ -7,6 +7,11 @@
 # kills the whole script silently. Errors are handled explicitly instead.
 set -u
 
+# Version & Repository Info
+SCRIPT_VERSION="1.1.0"
+REPO_RAW_URL="https://raw.githubusercontent.com/Fauzan-Fz/Change-Config-CC/main"
+REMOTE_SCRIPT_URL="$REPO_RAW_URL/change-cc"
+
 # Configuration
 SETTINGS_FILE="$HOME/.claude/settings.json"
 SCRIPT_NAME="change-cc"
@@ -185,7 +190,7 @@ get_all_model_variants() {
 # Show current configuration
 show_current_config() {
     print_header "╔══════════════════════════════════════════════════════════════╗"
-    print_header "║           Current Claude Code Configuration                 ║"
+    print_header "║       Current Claude Code Configuration (v$SCRIPT_VERSION)       ║"
     print_header "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 
@@ -567,6 +572,74 @@ change_main_model() {
     esac
 }
 
+# Update script to latest version from GitHub
+update_script() {
+    print_header "═══ Update Script (from GitHub) ═══"
+    print_info "Current script version: v$SCRIPT_VERSION"
+    print_info "Fetching latest version from GitHub repository..."
+
+    local fetch_cmd=""
+    if command -v curl &>/dev/null; then
+        fetch_cmd="curl -fsSL"
+    elif command -v wget &>/dev/null; then
+        fetch_cmd="wget -qO-"
+    else
+        print_error "Neither curl nor wget is installed. Cannot download updates."
+        return 1
+    fi
+
+    local temp_file
+    temp_file="/tmp/change-cc-update.$$"
+    if ! $fetch_cmd "$REMOTE_SCRIPT_URL" > "$temp_file" 2>/dev/null; then
+        print_error "Failed to download update from: $REMOTE_SCRIPT_URL"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    if ! head -n 1 "$temp_file" | grep -q "^#!/bin/bash"; then
+        print_error "Downloaded content is not a valid bash script."
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    local remote_version
+    remote_version=$(grep -m 1 '^SCRIPT_VERSION=' "$temp_file" | cut -d'"' -f2 || echo "latest")
+    [[ -z "$remote_version" ]] && remote_version="latest"
+
+    print_info "Remote version available: v$remote_version"
+
+    local updated_any=0
+
+    # 1. Update installed global copy if present
+    if [[ -f "$SCRIPT_PATH" ]]; then
+        cp "$temp_file" "$SCRIPT_PATH"
+        chmod +x "$SCRIPT_PATH"
+        print_success "Updated global installation at: $SCRIPT_PATH (v$remote_version)"
+        updated_any=1
+    fi
+
+    # 2. Update current script location if different from global path
+    local self_path
+    self_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    if [[ -f "$self_path" && "$self_path" != "$SCRIPT_PATH" ]]; then
+        cp "$temp_file" "$self_path"
+        chmod +x "$self_path"
+        print_success "Updated local file at: $self_path (v$remote_version)"
+        updated_any=1
+    fi
+
+    if [[ $updated_any -eq 0 ]]; then
+        mkdir -p "$INSTALL_DIR"
+        cp "$temp_file" "$SCRIPT_PATH"
+        chmod +x "$SCRIPT_PATH"
+        print_success "Installed latest version to: $SCRIPT_PATH (v$remote_version)"
+    fi
+
+    rm -f "$temp_file"
+    print_success "Successfully updated change-cc to v$remote_version!"
+    return 0
+}
+
 # Main interactive menu
 interactive_menu() {
     while true; do
@@ -574,7 +647,7 @@ interactive_menu() {
         show_current_config
 
         print_header "══════════════════════════════════════════════════════════════"
-        print_header "                    CHANGE-CC MENU                             "
+        print_header "                 CHANGE-CC MENU (v$SCRIPT_VERSION)                 "
         print_header "══════════════════════════════════════════════════════════════"
         echo ""
         print_option "  ${YELLOW}1)${NC} Change Endpoint URL (ANTHROPIC_BASE_URL)"
@@ -583,10 +656,11 @@ interactive_menu() {
         print_option "  ${YELLOW}4)${NC} Change Main Model Field (.model)"
         print_option "  ${YELLOW}5)${NC} Change API Key (ANTHROPIC_AUTH_TOKEN)"
         print_option "  ${YELLOW}6)${NC} Backup Menu (make / restore backup)"
+        print_option "  ${YELLOW}7)${NC} Update Script (Download latest from GitHub)"
         print_option "  ${RED}0)${NC} Exit"
         echo ""
 
-        read_choice "Select option [0-6]: " 0 6
+        read_choice "Select option [0-7]: " 0 7
 
         case "$CHOICE" in
             1) change_endpoint ;;
@@ -595,6 +669,10 @@ interactive_menu() {
             4) change_main_model ;;
             5) change_auth_token ;;
             6) backup_menu ;;
+            7)
+                update_script
+                read -r -p "Press Enter to continue..." _
+                ;;
             0)
                 print_info "Goodbye!"
                 exit 0
@@ -776,6 +854,7 @@ Switch Claude Code models and settings in ~/.claude/settings.json
 OPTIONS:
     -h, --help       Show this help message
     -l, --list       Show current configuration
+    -U, --update     Update change-cc to latest version from GitHub
     -i, --install    Install the change-cc command globally
     -u, --uninstall  Uninstall the change-cc command
 
@@ -783,12 +862,14 @@ EXAMPLES:
     $SCRIPT_NAME                              # Interactive menu
     $SCRIPT_NAME anthropic/claude-sonnet[1m]  # Set default model with context directly
     $SCRIPT_NAME --list                       # Show current configuration
+    $SCRIPT_NAME --update                     # Update script from GitHub
     $SCRIPT_NAME --install                    # Install globally
     $SCRIPT_NAME --uninstall                  # Remove global command
 
 FEATURES:
     • Fixed layout parsing (no swapped keys or shifted indexes)
     • Interactive menu for all settings
+    • Self-update directly from GitHub (no git pull/clone needed)
     • Change endpoint URL (ANTHROPIC_BASE_URL)
     • Change main model field (.model)
     • Change all model variants (Default, Opus, Sonnet, Haiku, Fable, Small/Fast, Custom)
@@ -811,6 +892,9 @@ main() {
             ;;
         -l|--list)
             show_current_config
+            ;;
+        -U|--update|update)
+            update_script
             ;;
         -i|--install)
             install_script
