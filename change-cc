@@ -8,7 +8,7 @@
 set -u
 
 # Version & Repository Info
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.1.1"
 REPO_RAW_URL="https://raw.githubusercontent.com/Fauzan-Fz/Change-Config-CC/main"
 REMOTE_SCRIPT_URL="$REPO_RAW_URL/change-cc"
 
@@ -229,6 +229,11 @@ show_current_config() {
         printf "  ${MAGENTA}%-30s${NC} = ${GREEN}%s${NC}\n" "$label" "$display_val"
     done < <(get_all_model_variants)
     echo ""
+}
+
+# Show version
+show_version() {
+    echo "change-cc version $SCRIPT_VERSION"
 }
 
 # Change endpoint URL
@@ -572,11 +577,11 @@ change_main_model() {
     esac
 }
 
-# Update script to latest version from GitHub
+# Update script to latest version from GitHub with smart version checking
 update_script() {
     print_header "═══ Update Script (from GitHub) ═══"
     print_info "Current script version: v$SCRIPT_VERSION"
-    print_info "Fetching latest version from GitHub repository..."
+    print_info "Checking for updates from GitHub..."
 
     local fetch_cmd=""
     if command -v curl &>/dev/null; then
@@ -606,7 +611,24 @@ update_script() {
     remote_version=$(grep -m 1 '^SCRIPT_VERSION=' "$temp_file" | cut -d'"' -f2 || echo "latest")
     [[ -z "$remote_version" ]] && remote_version="latest"
 
-    print_info "Remote version available: v$remote_version"
+    # Version comparison check
+    if [[ "$remote_version" == "$SCRIPT_VERSION" ]]; then
+        print_info "You are already using the latest version (v$SCRIPT_VERSION)."
+        read -r -p "Do you want to force reinstall/update anyway? [y/N]: " force_choice
+        if [[ ! "$force_choice" =~ ^[yY]([eE][sS])?$ ]]; then
+            print_info "Update cancelled."
+            rm -f "$temp_file"
+            return 0
+        fi
+    else
+        print_info "New update available: v$remote_version (current: v$SCRIPT_VERSION)"
+        read -r -p "Proceed with update to v$remote_version? [Y/n]: " update_choice
+        if [[ "$update_choice" =~ ^[nN][oO]?$ ]]; then
+            print_info "Update cancelled."
+            rm -f "$temp_file"
+            return 0
+        fi
+    fi
 
     local updated_any=0
 
@@ -853,6 +875,7 @@ Switch Claude Code models and settings in ~/.claude/settings.json
 
 OPTIONS:
     -h, --help       Show this help message
+    -v, --version    Show change-cc version
     -l, --list       Show current configuration
     -U, --update     Update change-cc to latest version from GitHub
     -i, --install    Install the change-cc command globally
@@ -861,6 +884,7 @@ OPTIONS:
 EXAMPLES:
     $SCRIPT_NAME                              # Interactive menu
     $SCRIPT_NAME anthropic/claude-sonnet[1m]  # Set default model with context directly
+    $SCRIPT_NAME -v                           # Show version
     $SCRIPT_NAME --list                       # Show current configuration
     $SCRIPT_NAME --update                     # Update script from GitHub
     $SCRIPT_NAME --install                    # Install globally
@@ -870,6 +894,7 @@ FEATURES:
     • Fixed layout parsing (no swapped keys or shifted indexes)
     • Interactive menu for all settings
     • Self-update directly from GitHub (no git pull/clone needed)
+    • Version flag (-v, --version)
     • Change endpoint URL (ANTHROPIC_BASE_URL)
     • Change main model field (.model)
     • Change all model variants (Default, Opus, Sonnet, Haiku, Fable, Small/Fast, Custom)
@@ -889,6 +914,9 @@ main() {
     case "${1:-}" in
         -h|--help)
             show_help
+            ;;
+        -v|--version)
+            show_version
             ;;
         -l|--list)
             show_current_config

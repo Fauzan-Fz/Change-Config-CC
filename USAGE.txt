@@ -14,6 +14,7 @@ Features:
   * Interactive color-coded menu
   * Direct command-line mode
   * Self-update from GitHub
+  * Version flag (-v, --version)
   * Global install/uninstall
 
 REQUIREMENTS
@@ -39,6 +40,10 @@ Interactive Menu (default):
 Direct model setting:
   change-cc "anthropic/claude-sonnet[1m]"
   change-cc "anthropic/claude-opus[200k]"
+
+Check version:
+  change-cc --version
+  change-cc -v
 
 Update script:
   change-cc --update
@@ -136,9 +141,10 @@ Key functions:
   change_main_model()      - Menu: change top-level model field
   change_auth_token()      - Menu: change API key
   update_script()          - Fetch and apply latest script from GitHub
+  show_version()           - Print current script version
   backup_menu()            - Menu: backup/restore
   interactive_menu()       - Main menu loop
 
 VERSION
 -------
-v1.1.0
+v1.1.1

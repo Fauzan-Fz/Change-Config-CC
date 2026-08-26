@@ -23,6 +23,7 @@
 | **🎨 Interactive Menu** | Color-coded, user-friendly navigation with fixed layout consistency |
 | **⚡ Direct Mode** | `change-cc "model-name[1m]"` for quick model updates |
 | **🚀 Self-Update** | Update script to latest version directly from GitHub via menu or CLI |
+| **🏷️ Version Flag** | Quick version check via `change-cc -v` or `change-cc --version` |
 | **📦 Global Install** | Install to `~/.local/bin` for system-wide access |
 
 ---
@@ -72,7 +73,7 @@ change-cc
 **Menu Options:**
 ```
 ══════════════════════════════════════════════════════════════
-                 CHANGE-CC MENU (v1.1.0)                       
+                 CHANGE-CC MENU (v1.1.1)                       
 ══════════════════════════════════════════════════════════════
   1) Change Endpoint URL (ANTHROPIC_BASE_URL)
   2) Change Model Context (model[500k], model[1m])
@@ -95,6 +96,14 @@ change-cc "anthropic/claude-sonnet"
 
 # Any valid model identifier
 change-cc "anthropic/claude-opus[200k]"
+```
+
+### Check Version
+
+```bash
+change-cc --version
+# or
+change-cc -v
 ```
 
 ### Update Script Directly
@@ -231,10 +240,11 @@ Enter new API key (input hidden):
 
 ```
 ═══ Update Script (from GitHub) ═══
-Current script version: v1.1.0
-Fetching latest version from GitHub repository...
-Remote version available: v1.1.0
-[SUCCESS] Successfully updated change-cc to v1.1.0!
+Current script version: v1.1.1
+Checking for updates from GitHub...
+Remote version available: v1.1.1
+You are already using the latest version (v1.1.1).
+Do you want to force reinstall/update anyway? [y/N]:
 ```
 
 ---
