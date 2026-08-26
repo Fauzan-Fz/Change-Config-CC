@@ -13,6 +13,7 @@ Features:
   * Auto-backup before changes + manual backup/restore
   * Interactive color-coded menu
   * Direct command-line mode
+  * Self-update from GitHub
   * Global install/uninstall
 
 REQUIREMENTS
@@ -24,7 +25,7 @@ REQUIREMENTS
 INSTALLATION
 ------------
   git clone https://github.com/Fauzan-Fz/Change-Config-CC.git
-  cd change-cc
+  cd Change-Config-CC
   chmod +x change-cc
   ./change-cc --install
 
@@ -38,6 +39,10 @@ Interactive Menu (default):
 Direct model setting:
   change-cc "anthropic/claude-sonnet[1m]"
   change-cc "anthropic/claude-opus[200k]"
+
+Update script:
+  change-cc --update
+  change-cc -U
 
 List configuration:
   change-cc --list
@@ -81,6 +86,8 @@ MENU OPTIONS
    1) Make Backup (timestamped)
    2) Restore from Backup
    0) Back
+
+7) Update Script (Download latest from GitHub)
 
 CONTEXT WINDOW FORMAT
 ---------------------
@@ -128,9 +135,10 @@ Key functions:
   change_model_variants()  - Menu: change model variants
   change_main_model()      - Menu: change top-level model field
   change_auth_token()      - Menu: change API key
+  update_script()          - Fetch and apply latest script from GitHub
   backup_menu()            - Menu: backup/restore
   interactive_menu()       - Main menu loop
 
 VERSION
 -------
-v1.0.1
+v1.1.0
