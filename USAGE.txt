@@ -11,6 +11,7 @@ Features:
   * Endpoint management (local proxy, official API, custom)
   * Auth token updates
   * Auto-backup before changes + manual backup/restore
+  * Clean/delete old backups with multi-select (2,3,4) or keep:N
   * Interactive color-coded menu
   * Direct command-line mode
   * Self-update from GitHub
@@ -90,6 +91,7 @@ MENU OPTIONS
 6) Backup Menu
    1) Make Backup (timestamped)
    2) Restore from Backup
+   3) Clean / Delete Old Backups (multi-select e.g. 2,3,4 or keep:5 or all)
    0) Back
 
 7) Update Script (Download latest from GitHub)
@@ -140,11 +142,12 @@ Key functions:
   change_model_variants()  - Menu: change model variants
   change_main_model()      - Menu: change top-level model field
   change_auth_token()      - Menu: change API key
+  clean_backups()          - Menu: clean/delete old backups (multi-select / bulk)
   update_script()          - Fetch and apply latest script from GitHub
   show_version()           - Print current script version
-  backup_menu()            - Menu: backup/restore
+  backup_menu()            - Menu: backup/restore/clean
   interactive_menu()       - Main menu loop
 
 VERSION
 -------
-v1.1.1
+v1.2.0

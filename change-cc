@@ -8,7 +8,7 @@
 set -u
 
 # Version & Repository Info
-SCRIPT_VERSION="1.1.1"
+SCRIPT_VERSION="1.2.0"
 REPO_RAW_URL="https://raw.githubusercontent.com/Fauzan-Fz/Change-Config-CC/main"
 REMOTE_SCRIPT_URL="$REPO_RAW_URL/change-cc"
 
@@ -662,6 +662,114 @@ update_script() {
     return 0
 }
 
+# Clean / Delete backups (supports comma-separated numbers, 'all', or 'keep:N')
+clean_backups() {
+    print_header "═══ Clean / Delete Backups ═══"
+    scan_backups
+    local n=${#BACKUPS[@]}
+
+    if [[ $n -eq 0 ]]; then
+        print_warning "No backup files found in ~/.claude/ to clean."
+        return 0
+    fi
+
+    echo ""
+    print_info "Available backups ($n):"
+    for i in "${!BACKUPS[@]}"; do
+        local date_str
+        date_str=$(basename "${BACKUPS[i]}" | sed 's/settings.json.backup.//')
+        printf "  ${YELLOW}%2d)${NC} %s\n" $((i+1)) "$date_str"
+    done
+    echo ""
+    print_option "Selection options:"
+    echo "  • Enter number or comma-separated numbers to delete (e.g. 2,3,4 or 1, 3)"
+    echo "  • Type 'all' to delete all backups"
+    echo "  • Type 'keep:5' to keep the latest 5 backups and delete older ones"
+    echo "  • Enter '0' or press Enter to cancel"
+    echo ""
+
+    local clean_input=""
+    read -r -p "Enter selection: " clean_input
+    clean_input="$(echo "$clean_input" | xargs)" # trim whitespace
+
+    [[ -z "$clean_input" || "$clean_input" == "0" ]] && { print_info "Cancelled"; return 0; }
+
+    local to_delete=()
+
+    if [[ "$clean_input" =~ ^[aA][lL][lL]$ ]]; then
+        read -r -p "Are you sure you want to delete ALL $n backups? [y/N]: " confirm_all
+        if [[ "$confirm_all" =~ ^[yY]([eE][sS])?$ ]]; then
+            for f in "${BACKUPS[@]}"; do
+                to_delete+=("$f")
+            done
+        else
+            print_info "Cancelled."
+            return 0
+        fi
+    elif [[ "$clean_input" =~ ^keep:([0-9]+)$ ]]; then
+        local keep_count="${BASH_REMATCH[1]}"
+        if (( keep_count >= n )); then
+            print_info "Total backups ($n) is less than or equal to keep limit ($keep_count). Nothing to delete."
+            return 0
+        fi
+        for (( i=keep_count; i<n; i++ )); do
+            to_delete+=("${BACKUPS[i]}")
+        done
+    else
+        # Comma-separated or space-separated numbers
+        local sanitized="${clean_input//,/ }"
+        local invalid_entries=()
+        for item in $sanitized; do
+            if [[ "$item" =~ ^[0-9]+$ ]]; then
+                local idx=$(( item - 1 ))
+                if (( idx >= 0 && idx < n )); then
+                    local target_file="${BACKUPS[idx]}"
+                    local already=0
+                    for d in "${to_delete[@]}"; do
+                        if [[ "$d" == "$target_file" ]]; then
+                            already=1
+                            break
+                        fi
+                    done
+                    [[ $already -eq 0 ]] && to_delete+=("$target_file")
+                else
+                    invalid_entries+=("$item")
+                fi
+            else
+                invalid_entries+=("$item")
+            fi
+        done
+
+        if [[ ${#invalid_entries[@]} -gt 0 ]]; then
+            print_warning "Ignored out-of-range/invalid input: ${invalid_entries[*]}"
+        fi
+    fi
+
+    if [[ ${#to_delete[@]} -eq 0 ]]; then
+        print_warning "No valid backup files selected for deletion."
+        return 0
+    fi
+
+    echo ""
+    print_warning "Files to be deleted (${#to_delete[@]}):"
+    for f in "${to_delete[@]}"; do
+        printf "       • %s\n" "$(basename "$f" | sed 's/settings.json.backup.//')"
+    done
+    echo ""
+    read -r -p "Confirm deletion of ${#to_delete[@]} backup(s)? [y/N]: " confirm_del
+    if [[ "$confirm_del" =~ ^[yY]([eE][sS])?$ ]]; then
+        local deleted_count=0
+        for f in "${to_delete[@]}"; do
+            if rm -f "$f"; then
+                ((deleted_count++))
+            fi
+        done
+        print_success "Successfully deleted $deleted_count backup(s)."
+    else
+        print_info "Deletion cancelled."
+    fi
+}
+
 # Main interactive menu
 interactive_menu() {
     while true; do
@@ -677,7 +785,7 @@ interactive_menu() {
         print_option "  ${YELLOW}3)${NC} Change Model Variants (Default, Opus, Sonnet, Haiku, etc.)"
         print_option "  ${YELLOW}4)${NC} Change Main Model Field (.model)"
         print_option "  ${YELLOW}5)${NC} Change API Key (ANTHROPIC_AUTH_TOKEN)"
-        print_option "  ${YELLOW}6)${NC} Backup Menu (make / restore backup)"
+        print_option "  ${YELLOW}6)${NC} Backup Menu (make / restore / clean backups)"
         print_option "  ${YELLOW}7)${NC} Update Script (Download latest from GitHub)"
         print_option "  ${RED}0)${NC} Exit"
         echo ""
@@ -730,7 +838,7 @@ scan_backups() {
     claude_dir="$(dirname "$SETTINGS_FILE")"
     while IFS= read -r f; do
         [[ -n "$f" ]] && BACKUPS+=("$f")
-    done < <(ls -t "$claude_dir/"settings.json.backup.* 2>/dev/null | head -20 || true)
+    done < <(ls -t "$claude_dir/"settings.json.backup.* 2>/dev/null | head -50 || true)
     return 0
 }
 
@@ -822,13 +930,24 @@ backup_menu() {
         echo ""
         print_option "  ${YELLOW}1)${NC} Make Backup (save current settings)"
         print_option "  ${YELLOW}2)${NC} Restore Backup (from list or custom path)"
+        print_option "  ${YELLOW}3)${NC} Clean / Delete Old Backups (multi-select / bulk)"
         print_option "  ${RED}0)${NC} Back to Main Menu"
         echo ""
 
-        read_choice "Select option [0-2]: " 0 2
+        read_choice "Select option [0-3]: " 0 3
         case "$CHOICE" in
-            1) make_backup ;;
-            2) restore_backup ;;
+            1)
+                make_backup
+                read -r -p "Press Enter to continue..." _
+                ;;
+            2)
+                restore_backup
+                read -r -p "Press Enter to continue..." _
+                ;;
+            3)
+                clean_backups
+                read -r -p "Press Enter to continue..." _
+                ;;
             0) return 0 ;;
         esac
         echo ""
@@ -894,6 +1013,7 @@ FEATURES:
     • Fixed layout parsing (no swapped keys or shifted indexes)
     • Interactive menu for all settings
     • Self-update directly from GitHub (no git pull/clone needed)
+    • Clean & Delete old backups (single, comma-separated e.g. 2,3,4, 'all', or 'keep:N')
     • Version flag (-v, --version)
     • Change endpoint URL (ANTHROPIC_BASE_URL)
     • Change main model field (.model)

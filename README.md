@@ -20,6 +20,7 @@
 | **🌐 Endpoint Management** | Switch between local proxy, official Anthropic API, or custom endpoints |
 | **🔑 Auth Token** | Update `ANTHROPIC_AUTH_TOKEN` securely |
 | **💾 Backup/Restore** | Auto-backup before changes, manual backup, and restore from any backup |
+| **🧹 Backup Cleaning** | Delete old backups with multi-select (`2,3,4`), `all`, or `keep:N` |
 | **🎨 Interactive Menu** | Color-coded, user-friendly navigation with fixed layout consistency |
 | **⚡ Direct Mode** | `change-cc "model-name[1m]"` for quick model updates |
 | **🚀 Self-Update** | Update script to latest version directly from GitHub via menu or CLI |
@@ -73,14 +74,14 @@ change-cc
 **Menu Options:**
 ```
 ══════════════════════════════════════════════════════════════
-                 CHANGE-CC MENU (v1.1.1)                       
+                 CHANGE-CC MENU (v1.2.0)                       
 ══════════════════════════════════════════════════════════════
   1) Change Endpoint URL (ANTHROPIC_BASE_URL)
   2) Change Model Context (model[500k], model[1m])
   3) Change Model Variants (Default, Opus, Sonnet, Haiku, Fable, etc.)
   4) Change Main Model Field (.model)
   5) Change API Key (ANTHROPIC_AUTH_TOKEN)
-  6) Backup Menu (make / restore backup)
+  6) Backup Menu (make / restore / clean backups)
   7) Update Script (Download latest from GitHub)
   0) Exit
 ```
@@ -233,17 +234,23 @@ Enter new API key (input hidden):
 ═══ Backup Menu ═══
   1) Make Backup (save current settings)
   2) Restore Backup (from list or custom path)
+  3) Clean / Delete Old Backups (multi-select / bulk)
   0) Back to Main Menu
 ```
+
+**Clean / Delete Backups Options:**
+* Enter single or comma-separated numbers (e.g., `2,3,4` or `1, 3`) to delete specific backups
+* Enter `all` to delete all backup files
+* Enter `keep:5` to keep the latest 5 backups and delete older ones
 
 ### 7. Update Script
 
 ```
 ═══ Update Script (from GitHub) ═══
-Current script version: v1.1.1
+Current script version: v1.2.0
 Checking for updates from GitHub...
-Remote version available: v1.1.1
-You are already using the latest version (v1.1.1).
+Remote version available: v1.2.0
+You are already using the latest version (v1.2.0).
 Do you want to force reinstall/update anyway? [y/N]:
 ```
 
